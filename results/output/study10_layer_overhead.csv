@@ -1,0 +1,6 @@
+layer,mean_ms
+execution (bare),63.48753999336623
++ energy meter,76.20870000100695
++ failures,68.25143999303691
+cost decisions (1000x20),121.05547999963164
+"routing (2000 flows, 20 nodes)",182.6151800050866
