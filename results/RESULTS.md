@@ -40,14 +40,14 @@ reproduce the synthetic findings, which is the key external-validity claim.
 | 1 | Offloading policies | synthetic | Cost-driven ≈11× cheaper than random, ~12% better than latency-greedy |
 | **1b** | Offloading | **real EUA** | Cost-driven cuts **energy ~67–75%** for ~10% latency |
 | **1c** | Offloading | **real Shanghai** | Same **energy ~68–74%** cut on a second real city (cross-validation) |
-| 2 | DRL vs heuristics | synthetic | DQN ≈ greedy (0.29 vs 0.41, overlapping CIs); both ≫ default-tuned on-policy & random |
+| 2 | DRL vs heuristics | synthetic | DQN vs greedy: no significant difference (paired diff −0.11, 95% CI [−0.34, +0.11], p_adj=0.30; equivalence not shown); both ≫ default-tuned on-policy & random |
 | **2b** | DRL | **real EUA** | **DQN ~37% cheaper than greedy** on real Melbourne (robust at 12 seeds) |
 | 3 | Routing policies | synthetic | Latency-aware routing: −60% congestion for +28% delay |
 | 4 | Execution & reliability | synthetic | Contention & failures degrade response/SLA; models validated within 95% CI |
 | **4b** | Execution & reliability | **real Alibaba + EUA** | Server failures raise response **×4.3**, deadline misses to 16% |
 | 5 | Cost-model weight sensitivity | real EUA | Diagonally dominant: each objective minimized at its own weight |
 | 6 | Routing (larger topology) | real EUA coords | Trade-off holds on an 80-node multi-hop mesh |
-| 7 | DRL hyperparameter tuning | synthetic | Tuned PPO 2.25→0.141 (16×); competitive with DQN |
+| 7 | DRL hyperparameter tuning (16 seeds) | synthetic | Tuned PPO 1.86→0.32 (5.8× vs lr=1e-4; 3.0× vs default 0.97); still significantly above DQN/greedy (~0.004; paired p_adj=0.014) |
 | 7b | Fair tuning (equal budget, 10 seeds) | synthetic | DQN best (0.006), PPO 0.664, A2C 1.167; DQN ~2.8–4.5× slower to train |
 | **8** | **Integrated end-to-end** | **real EUA + Alibaba** | Intelligent stack: network −27%, SLA −17%, energy −4% |
 | **9** | **Ablation (10 seeds)** | **real EUA + Alibaba** | Cost model = workhorse (net −35%, deadline −24%); DRL+routing trades response for energy (honest trade-off) |
@@ -105,10 +105,14 @@ to the min-cost greedy and random baselines.
 **Finding.** DQN achieves the **lowest mean cost**, with greedy second; both are far better than
 the default-hyperparameter on-policy agents (PPO, A2C) and random. With 16 seeds (up from 6) the
 on-policy CIs tightened substantially (PPO ±0.92→±0.53, A2C ±1.56→±0.63), and the **DQN-vs-greedy
-gap is now within overlapping confidence intervals** — i.e. *not* statistically significant at
-this budget, a more cautious conclusion than the earlier 6-seed run suggested. The honest reading
-is: **DQN matches the greedy heuristic and both clearly dominate the default-tuned policy-gradient
-agents and random** (which *are* separated with large effect sizes). On-policy performance is a
+gap is not statistically significant**. Because the seeds are shared, the two policies are
+compared directly with a paired test (Holm-corrected; `study2_drl_significance.csv`): DQN is
+0.114 lower on average, 95% CI of the paired difference [−0.342, +0.113], adjusted p = 0.30,
+Cohen's d = −0.27 (small). Overlapping marginal CIs alone do not establish equivalence, and
+neither does this test: it detects no difference and rules out only large ones. The honest
+reading is: **no difference between DQN and greedy was detected at this budget, and both clearly
+dominate the default-tuned policy-gradient agents and random** (which *are* separated with large
+effect sizes; per-seed values are in `study2_drl_per_seed.csv`). On-policy performance is a
 hyperparameter artifact here — Study 7 shows tuning closes most of the gap. Figures:
 [`study2_learning_curves.png`](output/study2_learning_curves.png) and
 [`study2_drl_comparison.png`](output/study2_drl_comparison.png).
@@ -379,29 +383,35 @@ visible only because the layers interact. Figure:
 
 Study 2 compared agents at a *fixed* budget, where PPO/A2C lagged. This study sweeps a
 learning-rate × entropy grid for the on-policy agents on a small synthetic scenario (8
-services, 5 servers; 400 episodes; 4 seeds; script [`study7_drl_tuning.py`](study7_drl_tuning.py))
+services, 5 servers; 400 episodes; 16 seeds, raised from 4; script [`study7_drl_tuning.py`](study7_drl_tuning.py))
 to test whether that lag is inherent or a tuning artifact.
 
 PPO grid (final weighted cost, ↓):
 
 | learning rate | entropy 0.01 | entropy 0.05 |
 |---|---|---|
-| 1e-4 | 2.249 | 1.860 |
-| 3e-4 | 0.840 | 0.728 |
-| **1e-3** | 0.185 | **0.141** |
+| 1e-4 | 1.865 | 1.736 |
+| 3e-4 | 0.975 | 0.922 |
+| **1e-3** | 0.411 | **0.324** |
 
-Best per agent: **PPO 0.141**, **A2C 0.763** (both at lr=1e-3, entropy=0.05); greedy ≈ 0 on
-this easy scenario; DQN reaches ~0.14 (default settings).
+Best per agent: **PPO 0.324** (±0.197), **A2C 0.704** (±0.245) (both at lr=1e-3, entropy=0.05);
+greedy ≈ 0.005 and DQN (default settings) ≈ 0.004 on this easy scenario.
 
-**Finding.** The on-policy lag in Study 2 was almost entirely a **learning-rate artifact**:
-raising PPO's learning rate from 1e-4 to 1e-3 cuts its final cost **16×** (2.25 → 0.141),
-bringing it level with DQN and close to the greedy optimum; A2C improves ~3× (to 0.763) but
-remains the weakest. Entropy has a second-order effect (slightly favouring 0.05). Learning
-curves for the tuned agents vs. DQN and the greedy baseline are in
-[`study7_drl_tuning_curves.png`](output/study7_drl_tuning_curves.png); the full grid is in
-[`study7_drl_tuning_grid.csv`](output/study7_drl_tuning_grid.csv). **Takeaway for the paper:
-with proper tuning, PPO is competitive with DQN** — the earlier gap reflected budget/tuning,
-not an inherent weakness of policy-gradient methods here.
+**Finding.** Most of the on-policy lag in Study 2 is a **learning-rate effect**: raising PPO's
+learning rate from 1e-4 to 1e-3 cuts its final cost **5.8×** (1.865 → 0.324; 3.0× relative to
+the default 3e-4/0.01 setting, 0.975 → 0.324, paired p_adj = 0.0002); A2C improves ~3.1×
+(2.191 → 0.704) but remains the weakest. Entropy has a second-order effect (slightly favouring
+0.05). However, with 16 seeds the gap is **narrowed, not closed**: tuned PPO is still
+significantly above DQN and greedy (paired difference +0.32, 95% CI [+0.13, +0.51], adjusted
+p = 0.014, d = 0.89; `study7_drl_tuning_significance.csv`), and the 4-seed result
+(0.141, "level with DQN") overstated the effect of tuning. Training-reward curves for the tuned
+agents vs. DQN and the greedy baseline are in
+[`study7_drl_tuning_curves.png`](output/study7_drl_tuning_curves.png) (they overlap for PPO and
+DQN during training, but evaluated final cost separates them); the full grid is in
+[`study7_drl_tuning_grid.csv`](output/study7_drl_tuning_grid.csv) and per-seed values in
+[`study7_drl_tuning_per_seed.csv`](output/study7_drl_tuning_per_seed.csv). **Takeaway for the
+paper:** tuning substantially improves PPO and A2C, so the fixed-budget gap was largely a
+tuning artifact, but tuned PPO does not reach DQN/greedy on this task at this budget.
 
 ## Study 7b — Fair hyperparameter exploration (equal budget)
 

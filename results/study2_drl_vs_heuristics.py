@@ -18,7 +18,7 @@ from edge_sim_py.drl import (
     evaluate_greedy,
     evaluate_random,
 )
-from edge_sim_py.experiments import confidence_interval, results_to_csv
+from edge_sim_py.experiments import confidence_interval, results_to_csv, compare_all_pairs
 
 # Python libraries
 import numpy as np
@@ -83,6 +83,25 @@ def main():
         bar_errors.append(ci["half_width"])
 
     csv_path = results_to_csv(rows, output_path("study2_drl_comparison.csv"))
+
+    # --- Per-seed values + direct (paired) statistical comparison ---
+    # Overlapping 95% CIs on the marginal means do not by themselves show that two policies are
+    # equivalent (or different); the seeds are shared, so we compare the policies directly with
+    # paired tests (Holm-corrected) and report the 95% CI of the paired mean difference.
+    groups = dict(zip(labels, datasets))
+    per_seed_rows = [{"seed": seed, **{label: float(values[i]) for label, values in groups.items()}} for i, seed in enumerate(SEEDS)]
+    results_to_csv(per_seed_rows, output_path("study2_drl_per_seed.csv"))
+    sig_rows = compare_all_pairs(groups, paired=True, correction="holm")
+    for row in sig_rows:
+        diff = np.array(groups[row["group_a"]]) - np.array(groups[row["group_b"]])
+        dci = confidence_interval(list(diff))
+        row["diff_ci95_low"] = dci["mean"] - dci["half_width"]
+        row["diff_ci95_high"] = dci["mean"] + dci["half_width"]
+    sig_path = results_to_csv(sig_rows, output_path("study2_drl_significance.csv"))
+    print("\nPaired comparisons (Holm-corrected):")
+    for r in sig_rows:
+        print(f"  {r['group_a']:<7} vs {r['group_b']:<7} diff={r['mean_difference']:+.3f} "
+              f"[{r['diff_ci95_low']:+.3f},{r['diff_ci95_high']:+.3f}] p_adj={r['p_adjusted']:.4f} d={r['cohens_d']:+.2f}")
     bar_path = grouped_bar_chart(
         categories=labels,
         series={"mean cost": bar_values},
